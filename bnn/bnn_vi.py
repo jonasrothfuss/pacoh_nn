@@ -1,9 +1,9 @@
 import tensorflow as tf
-from tensorflow_probability import distributions as tfd
 
-from modules.abstract import RegressionModel
+from bnn.abstract import RegressionModel
 from modules.neural_network import BatchedFullyConnectedNN
 from modules.prior_posterior import GaussianPosterior, GaussianPrior
+from modules.likelihood import GaussianLikelihood
 
 
 class BayesianNeuralNetworkVI(RegressionModel):
@@ -36,6 +36,9 @@ class BayesianNeuralNetworkVI(RegressionModel):
                                    likelihood_prior_mean=likelihood_prior_mean,
                                    likelihood_prior_std=likelihood_prior_std)
 
+        # Likelihood
+        self.likelihood = GaussianLikelihood(self.output_size, self.batch_size_vi)
+
         # setup posterior
         self.posterior = GaussianPosterior(self.nn.get_variables_stacked_per_model(), self.likelihood_param_size)
 
@@ -58,7 +61,7 @@ class BayesianNeuralNetworkVI(RegressionModel):
         y_pred = tf.concat(y_pred_batches, axis=0)
         likelihood_std = tf.concat(likelihood_std_batches, axis=0)
 
-        pred_dist = self._predictive_mixture(y_pred, likelihood_std)
+        pred_dist = self.likelihood.get_pred_mixture_dist(y_pred, likelihood_std)
 
         # unnormalize preds
         y_pred = self._unnormalize_preds(y_pred)
@@ -74,13 +77,10 @@ class BayesianNeuralNetworkVI(RegressionModel):
             # sample batch of parameters from the posterior
             sampled_params = self.posterior.sample((self.batch_size_vi,))
             nn_params, likelihood_std = self._split_into_nn_params_and_likelihood_std(sampled_params)
-            likelihood_std = tf.stack([likelihood_std] * self.batch_size, axis=1)  # (batch_size_vi, batch_size, 1)
 
             # compute log-likelihood
-            likelihood_mean = self.nn.call_parametrized(x_batch, nn_params)  # (batch_size_vi, batch_size, 1)
-            likelihood = tfd.Independent(tfd.Normal(likelihood_mean, likelihood_std), reinterpreted_batch_ndims=1)
-            log_likelihood = likelihood.log_prob(y_batch)
-            avg_log_likelihood = tf.reduce_mean(log_likelihood)
+            y_pred = self.nn.call_parametrized(x_batch, nn_params)  # (batch_size_vi, batch_size, 1)
+            avg_log_likelihood = self.likelihood.log_prob(y_pred, y_batch, likelihood_std)
 
             # compute kl
             kl_divergence = self.posterior.log_prob(sampled_params) - self.prior.log_prob(sampled_params)

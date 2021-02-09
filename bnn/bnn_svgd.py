@@ -1,9 +1,10 @@
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-from modules.abstract import RegressionModel
+from bnn.abstract import RegressionModel
 from modules.neural_network import BatchedFullyConnectedNN
 from modules.prior_posterior import GaussianPrior
+from modules.likelihood import GaussianLikelihood
 
 tfd = tfp.distributions
 tfk = tfp.math.psd_kernels
@@ -14,7 +15,7 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
     def __init__(self, x_train, y_train, hidden_layer_sizes=(32, 32), activation='elu',
                  likelihood_std=0.1, learn_likelihood=True, prior_std=0.1, prior_weight=1.0,
                  likelihood_prior_mean=tf.math.log(0.1), likelihood_prior_std=1.0,
-                 n_particles=10, batch_size=8, bandwidth=0.01, lr=1e-3):
+                 n_particles=10, batch_size=8, bandwidth=0.01, lr=1e-3, meta_learned_prior=None):
 
         self.prior_weight = prior_weight
         self.likelihood_std = likelihood_std
@@ -39,6 +40,9 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
                                    likelihood_prior_mean=likelihood_prior_mean,
                                    likelihood_prior_std=likelihood_prior_std)
 
+        # Likelihood
+        self.likelihood = GaussianLikelihood(self.output_size, n_particles)
+
         # setup particles & kernel
         nn_params = self.nn.get_variables_stacked_per_model()
         likelihood_params = tf.ones((self.n_particles, self.likelihood_param_size)) * likelihood_prior_mean
@@ -58,7 +62,7 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
         y_pred = self.nn.call_parametrized(x, nn_params)
 
         # form mixture of predictive distributions
-        pred_dist = self._predictive_mixture(y_pred, likelihood_std)
+        pred_dist = self.likelihood.get_pred_mixture_dist(y_pred, likelihood_std)
 
         # unnormalize preds
         y_pred = self._unnormalize_preds(y_pred)
@@ -74,12 +78,9 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
             tape.watch(self.particles)
             nn_params, likelihood_std = self._split_into_nn_params_and_likelihood_std(self.particles)
 
-            # compute likeliood
-            likelihood_mean = self.nn.call_parametrized(x_batch, nn_params)  # (k, b, d)
-            likelihood_std = tf.stack([likelihood_std] * self.batch_size, axis=1)  # (k, b, d)
-            likelihood = tfd.Independent(tfd.Normal(likelihood_mean, likelihood_std), reinterpreted_batch_ndims=1)
-            log_likelihood = likelihood.log_prob(y_batch)
-            avg_log_likelihood = tf.reduce_mean(log_likelihood)
+            # compute likelihood
+            y_pred = self.nn.call_parametrized(x_batch, nn_params)  # (k, b, d)
+            avg_log_likelihood = self.likelihood.log_prob(y_pred, y_batch, likelihood_std)
 
             # compute posterior log_prob
             post_log_prob = avg_log_likelihood + lam * self.prior.log_prob(self.particles)  # (k,)
