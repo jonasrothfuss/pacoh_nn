@@ -7,11 +7,14 @@ tfd = tfp.distributions
 
 class GaussianLikelihood(tf.Module):
 
-    def __init__(self, output_dim, n_batched_models, std=0.2, trainable=False, name='gaussian_likelihood'):
+    def __init__(self, output_dim, n_batched_models, std=0.2, trainable=True, name='gaussian_likelihood'):
         super().__init__(name=name)
         self.output_dim = output_dim
         self.n_batched_models = n_batched_models
-        self.log_std = tf.Variable(tf.ones(n_batched_models, output_dim) * tf.math.log(std), trainable=trainable)
+        if trainable:
+            self.log_std = tf.Variable(tf.ones(n_batched_models, output_dim) * tf.math.log(std), trainable=True)
+        else:
+            self.log_std = tf.constant(tf.ones(n_batched_models, output_dim) * tf.math.log(std))
 
     @property
     def std(self):
@@ -28,7 +31,7 @@ class GaussianLikelihood(tf.Module):
         tf.assert_equal(likelihood_std.shape, y_pred.shape)
         likelihood = tfd.Independent(tfd.Normal(y_pred, likelihood_std), reinterpreted_batch_ndims=1)
         log_likelihood = likelihood.log_prob(y_true)
-        avg_log_likelihood = tf.reduce_mean(log_likelihood)
+        avg_log_likelihood = tf.reduce_mean(log_likelihood, axis=-1) # average over batch
         return avg_log_likelihood
 
     def calculate_eval_metrics(self, pred_dist, y_true):

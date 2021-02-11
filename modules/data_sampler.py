@@ -448,3 +448,26 @@ class DatasetSampler:
 
         return x, y
 
+
+""" --- helper functions --- """
+
+def _split_into_batches(list, max_batch_size):
+    import math
+    n_elements = len(list)
+    if max_batch_size == -1:
+        max_batch_size = n_elements
+    n_batches = math.ceil(n_elements / float(max_batch_size))
+    remainder = n_elements % n_batches
+    batches = []
+    idx = 0
+    for i in range(n_batches):
+        if i < remainder:
+            batch_size = n_elements // n_batches + 1
+        else:
+            batch_size = n_elements // n_batches
+        batches.append(list[idx:idx + batch_size])
+        idx += batch_size
+
+    assert all([len(batch) <= max_batch_size for batch in batches])
+    assert np.sum([len(batch) for batch in batches]) == n_elements
+    return batches
