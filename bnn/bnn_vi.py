@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from bnn.abstract import RegressionModel
+from bnn.regression_algo import RegressionModel
 from modules.neural_network import BatchedFullyConnectedNN
 from modules.prior_posterior import GaussianPosterior, GaussianPrior
 from modules.likelihood import GaussianLikelihood

@@ -3,19 +3,8 @@ import tensorflow_probability as tfp
 from tqdm import trange
 
 from modules.affine_transform import AffineTransform
-from modules.data_sampler import MetaDatasetSampler
 
 tfd = tfp.distributions
-
-class MetaRegressionModel:
-
-    def _process_meta_train_data(self, meta_train_data, meta_batch_size, batch_size, n_batched_models_train):
-        self.num_meta_train_tasks = len(meta_train_data)
-        self.meta_train_sampler = MetaDatasetSampler(meta_train_data, batch_size, meta_batch_size=meta_batch_size,
-                                                    n_batched_models=n_batched_models_train, tiled=True)
-        self.x_mean, self.y_mean, self.x_std, self.y_std = self.meta_train_sampler.get_standardization_stats()
-        self.input_dim = self.meta_train_sampler.input_dim
-        self.output_dim = self.meta_train_sampler.output_dim
 
 class RegressionModel:
     likelihood = None
@@ -87,6 +76,14 @@ class RegressionModel:
         self.x_std = tfp.stats.stddev(x_train, sample_axis=0)
         self.y_mean = tf.reduce_mean(y_train, axis=0)
         self.y_std = tfp.stats.stddev(y_train, sample_axis=0)
+        self.affine_pred_dist_transform = AffineTransform(normalization_mean=self.y_mean,
+                                                          normalization_std=self.y_std)
+
+    def _set_normalization_stats(self, x_mean, x_std, y_mean, y_std):
+        self.x_mean = x_mean
+        self.x_std = x_std
+        self.y_mean = y_mean
+        self.y_std = y_std
         self.affine_pred_dist_transform = AffineTransform(normalization_mean=self.y_mean,
                                                           normalization_std=self.y_std)
 

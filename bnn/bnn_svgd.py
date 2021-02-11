@@ -1,7 +1,8 @@
 import tensorflow as tf
 import tensorflow_probability as tfp
+import math
 
-from bnn.abstract import RegressionModel
+from bnn.regression_algo import RegressionModel
 from modules.neural_network import BatchedFullyConnectedNN
 from modules.prior_posterior import GaussianPrior
 from modules.likelihood import GaussianLikelihood
@@ -14,13 +15,14 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
 
     def __init__(self, x_train, y_train, hidden_layer_sizes=(32, 32), activation='elu',
                  likelihood_std=0.1, learn_likelihood=True, prior_std=0.1, prior_weight=1.0,
-                 likelihood_prior_mean=tf.math.log(0.1), likelihood_prior_std=1.0,
+                 likelihood_prior_mean=tf.math.log(0.1), likelihood_prior_std=1.0, sqrt_mode=False,
                  n_particles=10, batch_size=8, bandwidth=0.01, lr=1e-3, meta_learned_prior=None):
 
         self.prior_weight = prior_weight
         self.likelihood_std = likelihood_std
         self.batch_size = batch_size
         self.n_particles = n_particles
+        self.sqrt_mode = False
 
         # data handling
         self._process_train_data(x_train, y_train)
@@ -35,21 +37,36 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
             self.likelihood_param_size = self.output_size
         else:
             self.likelihood_param_size = 0
-        self.prior = GaussianPrior(self.nn_param_size, nn_prior_std=prior_std,
-                                   likelihood_param_size=self.likelihood_param_size,
-                                   likelihood_prior_mean=likelihood_prior_mean,
-                                   likelihood_prior_std=likelihood_prior_std)
+
+        if meta_learned_prior is None:
+            self.prior = GaussianPrior(self.nn_param_size, nn_prior_std=prior_std,
+                                       likelihood_param_size=self.likelihood_param_size,
+                                       likelihood_prior_mean=likelihood_prior_mean,
+                                       likelihood_prior_std=likelihood_prior_std)
+            self.meta_learned_prior_mode = False
+        else:
+            self.prior = meta_learned_prior
+            assert meta_learned_prior.get_variables_stacked_per_model().shape[-1] == \
+                   2 * (self.nn_param_size + self.likelihood_param_size)
+            assert n_particles % self.prior.n_batched_priors == 0, "n_particles must be multiple of n_batched_priors"
+            self.meta_learned_prior_mode = True
 
         # Likelihood
         self.likelihood = GaussianLikelihood(self.output_size, n_particles)
 
-        # setup particles & kernel
-        nn_params = self.nn.get_variables_stacked_per_model()
-        likelihood_params = tf.ones((self.n_particles, self.likelihood_param_size)) * likelihood_prior_mean
-        self.particles = tf.Variable(tf.concat([nn_params, likelihood_params], axis=-1))
-        self.kernel = tfk.ExponentiatedQuadratic(length_scale=bandwidth)
+        # setup particles
+        if self.meta_learned_prior_mode:
+            # initialize posterior particles from meta-learned prior
+            params = tf.reshape(self.prior.sample(n_particles // self.prior.n_batched_priors), (n_particles, -1))
+            self.particles = tf.Variable(params)
+        else:
+            # initialize posterior particles from model initialization
+            nn_params = self.nn.get_variables_stacked_per_model()
+            likelihood_params = tf.ones((self.n_particles, self.likelihood_param_size)) * likelihood_prior_mean
+            self.particles = tf.Variable(tf.concat([nn_params, likelihood_params], axis=-1))
 
-        # setup optimizer
+        # setup kernel and optimizer
+        self.kernel = tfk.ExponentiatedQuadratic(length_scale=bandwidth)
         self.optim = tf.keras.optimizers.Adam(lr)
 
     def predict(self, x):
@@ -71,7 +88,6 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
 
     @tf.function
     def step(self, x_batch, y_batch):
-        lam = self.prior_weight / self.num_train_samples
 
         # compute posterior score (gradient of log prob)
         with tf.GradientTape(watch_accessed_variables=False) as tape:
@@ -82,8 +98,16 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
             y_pred = self.nn.call_parametrized(x_batch, nn_params)  # (k, b, d)
             avg_log_likelihood = self.likelihood.log_prob(y_pred, y_batch, likelihood_std)
 
+            if self.meta_learned_prior_mode:
+                particles_reshaped = tf.reshape(self.particles, (self.prior.n_batched_priors,
+                                                 self.n_particles // self.prior.n_batched_priors, -1))
+                prior_prob = tf.reshape(self.prior.log_prob(particles_reshaped, model_params_prior_weight=self.prior_weight), (self.n_particles,))
+            else:
+                prior_prob = self.prior.log_prob(self.particles, model_params_prior_weight=self.prior_weight)
+
             # compute posterior log_prob
-            post_log_prob = avg_log_likelihood + lam * self.prior.log_prob(self.particles)  # (k,)
+            prior_pre_factor = 1 / math.sqrt(self.num_train_samples) if self.sqrt_mode else 1 / self.num_train_samples
+            post_log_prob = avg_log_likelihood + prior_pre_factor * prior_prob # (k,)
         score = tape.gradient(post_log_prob, self.particles)  # (k, n)
 
         # compute kernel matrix and grads
@@ -97,7 +121,6 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
         # apply SVGD gradients
         self.optim.apply_gradients([(- svgd_grads_stacked, self.particles)])
         return - post_log_prob
-
 
 
 if __name__ == '__main__':
