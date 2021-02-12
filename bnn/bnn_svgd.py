@@ -13,28 +13,29 @@ tfk = tfp.math.psd_kernels
 
 class BayesianNeuralNetworkSVGD(RegressionModel):
 
-    def __init__(self, x_train, y_train, hidden_layer_sizes=(32, 32), activation='elu',
-                 likelihood_std=0.1, learn_likelihood=True, prior_std=0.1, prior_weight=1.0,
+    def __init__(self, x_train, y_train, hidden_layer_sizes=(32, 32, 32, 32), activation='relu',
+                 likelihood_std=0.1, learn_likelihood=True, prior_std=0.1, prior_weight=1e-4,
                  likelihood_prior_mean=tf.math.log(0.1), likelihood_prior_std=1.0, sqrt_mode=False,
-                 n_particles=10, batch_size=8, bandwidth=0.01, lr=1e-3, meta_learned_prior=None):
+                 n_particles=10, batch_size=8, bandwidth=100., lr=1e-3, meta_learned_prior=None,
+                 normalization_stats=None):
 
         self.prior_weight = prior_weight
         self.likelihood_std = likelihood_std
         self.batch_size = batch_size
         self.n_particles = n_particles
-        self.sqrt_mode = False
+        self.sqrt_mode = sqrt_mode
 
         # data handling
-        self._process_train_data(x_train, y_train)
+        self._process_train_data(x_train, y_train, normalization_stats)
 
         # setup nn
-        self.nn = BatchedFullyConnectedNN(n_particles, self.output_size, hidden_layer_sizes, activation)
-        self.nn.build((None, self.input_size))
+        self.nn = BatchedFullyConnectedNN(n_particles, self.output_dim, hidden_layer_sizes, activation)
+        self.nn.build((None, self.input_dim))
 
         # setup prior
         self.nn_param_size = self.nn.get_variables_stacked_per_model().shape[-1]
         if learn_likelihood:
-            self.likelihood_param_size = self.output_size
+            self.likelihood_param_size = self.output_dim
         else:
             self.likelihood_param_size = 0
 
@@ -52,7 +53,7 @@ class BayesianNeuralNetworkSVGD(RegressionModel):
             self.meta_learned_prior_mode = True
 
         # Likelihood
-        self.likelihood = GaussianLikelihood(self.output_size, n_particles)
+        self.likelihood = GaussianLikelihood(self.output_dim, n_particles)
 
         # setup particles
         if self.meta_learned_prior_mode:

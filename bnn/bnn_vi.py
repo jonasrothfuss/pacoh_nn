@@ -22,13 +22,13 @@ class BayesianNeuralNetworkVI(RegressionModel):
         self._process_train_data(x_train, y_train)
 
         # setup nn
-        self.nn = BatchedFullyConnectedNN(self.batch_size_vi, self.output_size, hidden_layer_sizes, activation)
-        self.nn.build((None, self.input_size))
+        self.nn = BatchedFullyConnectedNN(self.batch_size_vi, self.output_dim, hidden_layer_sizes, activation)
+        self.nn.build((None, self.input_dim))
 
         # setup prior
         self.nn_param_size = self.nn.get_variables_stacked_per_model().shape[-1]
         if learn_likelihood:
-            self.likelihood_param_size = self.output_size
+            self.likelihood_param_size = self.output_dim
         else:
             self.likelihood_param_size = 0
         self.prior = GaussianPrior(self.nn_param_size, nn_prior_std=prior_std,
@@ -37,7 +37,7 @@ class BayesianNeuralNetworkVI(RegressionModel):
                                    likelihood_prior_std=likelihood_prior_std)
 
         # Likelihood
-        self.likelihood = GaussianLikelihood(self.output_size, self.batch_size_vi)
+        self.likelihood = GaussianLikelihood(self.output_dim, self.batch_size_vi)
 
         # setup posterior
         self.posterior = GaussianPosterior(self.nn.get_variables_stacked_per_model(), self.likelihood_param_size)

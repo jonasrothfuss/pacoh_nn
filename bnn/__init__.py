@@ -1,0 +1,2 @@
+from .bnn_svgd import BayesianNeuralNetworkSVGD
+from .bnn_vi import BayesianNeuralNetworkVI

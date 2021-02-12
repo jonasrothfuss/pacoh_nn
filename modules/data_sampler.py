@@ -152,7 +152,7 @@ class MetaDatasetSampler:
 
         flat_x = tf.linspace(x_min, x_max, 100)
         x = tf.reshape(flat_x, (100, self.output_dim))
-        y_pred, pred_dist = model.predict(x, sample_functions=sample_functions, sample_from_prior=sample_from_prior)
+        y_pred, pred_dist = model._predict(x, sample_functions=sample_functions, sample_from_prior=sample_from_prior)
 
         new_axis = False
         if ax is None:
@@ -366,7 +366,7 @@ class DatasetSampler:
         import matplotlib.pyplot as plt
         flat_x = tf.linspace(self.x_min, self.x_max, self.n_val_samples)
         x = tf.reshape(flat_x, self.val_data[0].shape)
-        y_pred, pred_dist = model.predict(x, sample_functions=sample_functions, sample_from_prior=sample_from_prior)
+        y_pred, pred_dist = model._predict(x, sample_functions=sample_functions, sample_from_prior=sample_from_prior)
 
         new_axis = False
         if ax is None:

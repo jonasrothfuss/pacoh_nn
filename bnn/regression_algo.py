@@ -36,11 +36,12 @@ class RegressionModel:
         _, pred_dist = self.predict(x)
         return self.likelihood.calculate_eval_metrics(pred_dist, y)
 
-    def plot_predictions(self, x_plot, iteration=None, experiment=None, show=False):
+    def plot_predictions(self, x_plot, show=False, plot_train_data=True, ax=None):
         from matplotlib import pyplot as plt
-        assert self.input_size == 1 and self.output_size == 1
+        assert self.input_dim == 1 and self.output_dim == 1
         y_pred, pred_dist = self.predict(x_plot)
-        fig, ax = plt.subplots(1, 1)
+        if ax is None:
+            fig, ax = plt.subplots(1, 1)
 
         # plot predictive mean and confidence interval
         ax.plot(x_plot, pred_dist.mean())
@@ -48,34 +49,36 @@ class RegressionModel:
         ax.fill_between(x_plot, lcb.numpy().flatten(), ucb.numpy().flatten(), alpha=0.2)
 
         for i in range(y_pred.shape[0]):
-            plt.plot(x_plot, y_pred[i], color='green', alpha=0.4, linewidth=1.0)
-        plt.show()
+            ax.plot(x_plot, y_pred[i], color='green', alpha=0.4, linewidth=1.0)
 
-        # unnormalize training data & plot it
-        x_train = self.x_train * self.x_std + self.x_mean
-        y_train = self.y_train * self.y_std + self.y_mean
-        ax.scatter(x_train, y_train, label="training")
+        if plot_train_data:
+            # unnormalize training data & plot it
+            x_train = self.x_train * self.x_std + self.x_mean
+            y_train = self.y_train * self.y_std + self.y_mean
+            ax.scatter(x_train, y_train)
+
         if show:
-            fig.show()
-        if experiment:
-            import os
-            parent_path = "../data/figures/" + experiment
-            os.makedirs(parent_path, exist_ok=True)
-            plt.savefig(parent_path + f"/{iteration}.pdf")
-        plt.close()
+            plt.show()
 
-    def _process_train_data(self, x_train, y_train):
+
+    def _process_train_data(self, x_train, y_train, normalization_stats=None):
         self.x_train, self.y_train = self._handle_input_data(x_train, y_train, convert_to_tensor=True)
-        self.input_size, self.output_size = self.x_train.shape[-1], self.y_train.shape[-1]
+        self.input_dim, self.output_dim = self.x_train.shape[-1], self.y_train.shape[-1]
         self.num_train_samples = self.x_train.shape[0]
-        self._compute_normalization_stats(self.x_train, self.y_train)
+        self._compute_normalization_stats(self.x_train, self.y_train, normalization_stats)
         self.x_train, self.y_train = self._normalize_data(self.x_train, self.y_train)
 
-    def _compute_normalization_stats(self, x_train, y_train):
-        self.x_mean = tf.reduce_mean(x_train, axis=0)
-        self.x_std = tfp.stats.stddev(x_train, sample_axis=0)
-        self.y_mean = tf.reduce_mean(y_train, axis=0)
-        self.y_std = tfp.stats.stddev(y_train, sample_axis=0)
+    def _compute_normalization_stats(self, x_train, y_train, normalization_stats=None):
+        if normalization_stats is None:
+            self.x_mean = tf.reduce_mean(x_train, axis=0)
+            self.x_std = tfp.stats.stddev(x_train, sample_axis=0)
+            self.y_mean = tf.reduce_mean(y_train, axis=0)
+            self.y_std = tfp.stats.stddev(y_train, sample_axis=0)
+        else:
+            self.x_mean = normalization_stats['x_mean']
+            self.x_std = normalization_stats['x_std']
+            self.y_mean = normalization_stats['y_mean']
+            self.y_std = normalization_stats['y_std']
         self.affine_pred_dist_transform = AffineTransform(normalization_mean=self.y_mean,
                                                           normalization_std=self.y_std)
 
@@ -148,9 +151,9 @@ class RegressionModel:
         if self.likelihood_param_size > 0:
             likelihood_std = tf.exp(params[:, -self.likelihood_param_size:])
         else:
-            likelihood_std = tf.ones((n_particles, self.output_size)) * self.likelihood_std
+            likelihood_std = tf.ones((n_particles, self.output_dim)) * self.likelihood_std
 
-        tf.assert_equal(likelihood_std.shape, (n_particles, self.output_size))
+        tf.assert_equal(likelihood_std.shape, (n_particles, self.output_dim))
         return nn_params, likelihood_std
 
     def predict(self, x):

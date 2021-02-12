@@ -13,7 +13,8 @@ X_HIGH = 5
 Y_HIGH = 2.5
 Y_LOW = -2.5
 
-from config import DATA_DIR
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 MNIST_DIR = os.path.join(DATA_DIR, 'mnist')
 PHYSIONET_DIR = os.path.join(DATA_DIR, 'physionet2012')
 SWISSFEL_DIR = os.path.join(DATA_DIR, 'swissfel')
