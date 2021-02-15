@@ -1,4 +1,3 @@
-import mnist
 import numpy as np
 import pandas as pd
 from scipy.stats import truncnorm
@@ -13,9 +12,8 @@ X_HIGH = 5
 Y_HIGH = 2.5
 Y_LOW = -2.5
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
-MNIST_DIR = os.path.join(DATA_DIR, 'mnist')
 PHYSIONET_DIR = os.path.join(DATA_DIR, 'physionet2012')
 SWISSFEL_DIR = os.path.join(DATA_DIR, 'swissfel')
 
@@ -127,75 +125,6 @@ class PhysionetDataset(MetaDataset):
                 break
 
         return meta_test_tuples
-
-
-class MNISTRegressionDataset(MetaDataset):
-
-    def __init__(self, random_state=None, dtype=np.float32):
-        super().__init__(random_state)
-        self.dtype = dtype
-
-        mnist_dir = MNIST_DIR if os.path.isdir(MNIST_DIR) else None
-
-        self.train_images = mnist.download_and_parse_mnist_file('train-images-idx3-ubyte.gz', target_dir=mnist_dir)
-        self.test_images = mnist.download_and_parse_mnist_file('t10k-images-idx3-ubyte.gz', target_dir=mnist_dir)
-
-        self.train_images = self.train_images / 255.0
-        self.test_images = self.train_images / 255.0
-
-    def generate_meta_train_data(self, n_tasks, n_samples):
-
-        meta_train_tuples = []
-
-        train_indices = self.random_state.choice(self.train_images.shape[0], size=n_tasks, replace=False)
-
-        for idx in train_indices:
-            x_context, t_context, _, _ = self._image_to_context_transform(self.train_images[idx], n_samples)
-            meta_train_tuples.append((x_context, t_context))
-
-        return meta_train_tuples
-
-    def generate_meta_test_data(self, n_tasks, n_samples_context, n_samples_test=-1):
-
-        meta_test_tuples = []
-
-        test_indices = self.random_state.choice(self.test_images.shape[0], size=n_tasks, replace=False)
-
-        for idx in test_indices:
-            x_context, t_context, x_test, t_test = self._image_to_context_transform(self.train_images[idx],
-                                                                                    n_samples_context)
-
-            # chose only subsam
-            if n_samples_test > 0 and n_samples_test < x_test.shape[0]:
-                indices = self.random_state.choice(x_test.shape[0], size=n_samples_test, replace=False)
-                x_test, t_test = x_test[indices], t_test[indices]
-
-            meta_test_tuples.append((x_context, t_context, x_test, t_test))
-
-        return meta_test_tuples
-
-    def _image_to_context_transform(self, image, num_context_points):
-        assert image.ndim == 2 and image.shape[0] == image.shape[1]
-        image_size = image.shape[0]
-        assert num_context_points <= image_size ** 2
-
-        xx, yy = np.meshgrid(np.arange(image_size), np.arange(image_size))
-        indices = np.array(list(zip(xx.flatten(), yy.flatten())))
-        context_indices = indices[self.random_state.choice(image_size ** 2, size=num_context_points, replace=False)]
-        context_values = image[tuple(zip(*context_indices))]
-
-        dtype_indices = {'names': ['f{}'.format(i) for i in range(2)],
-                         'formats': 2 * [indices.dtype]}
-
-        # indices that have not been used as context
-        test_indices_structured = np.setdiff1d(indices.view(dtype_indices), context_indices.view(dtype_indices))
-        test_indices = test_indices_structured.view(indices.dtype).reshape(-1, 2)
-
-        test_values = image[tuple(zip(*test_indices))]
-
-        return (np.array(context_indices, dtype=self.dtype), np.array(context_values, dtype=self.dtype),
-                np.array(test_indices, dtype=self.dtype), np.array(test_values, dtype=self.dtype))
-
 
 class SinusoidDataset(MetaDataset):
 
@@ -491,64 +420,6 @@ class SwissfelDataset(MetaDataset):
         meta_test_tuples = [(X[idx_context], Y[idx_context], X[idx_test], Y[idx_test]) for X, Y in meta_test_tuples]
 
         return meta_test_tuples
-
-
-""" Pendulum Dataset """
-from gym.envs.classic_control import PendulumEnv
-
-
-class PendulumDataset(MetaDataset):
-
-    def __init__(self, l_range=(0.6, 1.4), m_range=(0.6, 1.4), noise_std=0.01, random_state=None):
-        self.l_range = l_range
-        self.m_range = m_range
-        self.noise_std = noise_std
-        super().__init__(random_state)
-
-    def generate_meta_train_data(self, n_tasks, n_samples):
-        meta_train_tuples = []
-        for i in range(n_tasks):
-            env = self._sample_env()
-            X, Y = self._sample_trajectory(env, n_samples)
-            del env
-            meta_train_tuples.append((X, Y))
-        return meta_train_tuples
-
-    def generate_meta_test_data(self, n_tasks, n_samples_context, n_samples_test):
-        assert n_samples_test > 0
-        meta_test_tuples = []
-        for i in range(n_tasks):
-            env = self._sample_env()
-            X, Y = self._sample_trajectory(env, n_samples_context + n_samples_test)
-            meta_test_tuples.append(
-                (X[:n_samples_context], Y[:n_samples_context], X[n_samples_context:], Y[n_samples_context:]))
-
-        return meta_test_tuples
-
-    def _sample_env(self):
-        env = PendulumEnv()
-        env.l = self.random_state.uniform(*self.l_range)
-        env.m = self.random_state.uniform(*self.m_range)
-        env.seed(self.random_state.randint(0, 10 ** 6))
-        return env
-
-    def _sample_trajectory(self, env, length):
-        states = np.empty((length + 1, 3))
-        actions = np.empty((length, 1))
-        states[0] = env.reset()
-        for i in range(length):
-            a = self.random_state.uniform(env.action_space.low, env.action_space.high)
-            s, _, _, _ = env.step(a)  # take a random action
-            states[i + 1], actions[i] = s, a
-
-        # add noise
-        states = states + self.noise_std * self.random_state.normal(size=states.shape)
-        actions = actions + self.noise_std * self.random_state.normal(size=actions.shape)
-
-        x = np.concatenate([states[:-1], actions], axis=-1)
-        y = states[1:]
-        return x, y
-
 
 """ MHC complex """
 

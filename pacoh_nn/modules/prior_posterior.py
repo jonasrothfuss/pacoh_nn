@@ -3,7 +3,7 @@ import tensorflow_probability as tfp
 from tensorflow_probability import distributions as tfd
 
 #from pacoh_old.modules.batched_module import TFModuleBatched
-from modules import TFModuleBatched
+from pacoh_nn.modules import TFModuleBatched
 
 
 class GaussianPriorPerVariable(tf.keras.Model):

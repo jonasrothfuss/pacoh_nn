@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 from tqdm import trange
 
-from modules.affine_transform import AffineTransform
+from pacoh_nn.modules.affine_transform import AffineTransform
 
 tfd = tfp.distributions
 

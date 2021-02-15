@@ -1,15 +1,15 @@
 import time
-import numpy as np
 import tensorflow as tf
+import tensorflow_probability as tfp
 
-import modules
-from modules.neural_network import BatchedFullyConnectedNN
-from modules.likelihood import GaussianLikelihood
-from modules.prior_posterior import BatchedGaussianPrior
-from modules.affine_transform import AffineTransform
-from bnn.bnn_svgd import BayesianNeuralNetworkSVGD
-from modules.data_sampler import MetaDatasetSampler
-from pacoh.meta_algo import MetaLearner
+from pacoh_nn import modules
+from pacoh_nn.modules.neural_network import BatchedFullyConnectedNN
+from pacoh_nn.modules.likelihood import GaussianLikelihood
+from pacoh_nn.modules.prior_posterior import BatchedGaussianPrior
+from pacoh_nn.modules.affine_transform import AffineTransform
+from pacoh_nn.bnn.bnn_svgd import BayesianNeuralNetworkSVGD
+from pacoh_nn.modules import MetaDatasetSampler
+from pacoh_nn.meta_algo import MetaLearner
 
 class PACOH_NN_Regression(MetaLearner):
 
@@ -73,18 +73,18 @@ class PACOH_NN_Regression(MetaLearner):
                                                  name='gaussian_prior')
 
         self.hyper_prior_module = modules.GaussianHyperPrior(self.prior_module,
-                                                                 mean_mean=0.0, bias_mean_std=0.5, kernel_mean_std=0.5,
-                                                                 log_var_mean=-3.0, bias_log_var_std=0.5,
-                                                                 kernel_log_var_std=0.5,
-                                                                 likelihood_log_var_mean_mean=-8,
-                                                                 likelihood_log_var_mean_std=1.0,
-                                                                 likelihood_log_var_log_var_mean=-4,
-                                                                 likelihood_log_var_log_var_std=0.2)
+                                                             mean_mean=0.0, bias_mean_std=0.5, kernel_mean_std=0.5,
+                                                             log_var_mean=-3.0, bias_log_var_std=0.5,
+                                                             kernel_log_var_std=0.5,
+                                                             likelihood_log_var_mean_mean=-8,
+                                                             likelihood_log_var_mean_std=1.0,
+                                                             likelihood_log_var_log_var_mean=-4,
+                                                             likelihood_log_var_log_var_std=0.2)
 
         self.hyper_posterior_particles = tf.Variable(tf.expand_dims(self.prior_module.get_variables_stacked_per_model(), axis=0))
 
         self.affine_transform = AffineTransform(normalization_mean=self.y_mean, normalization_std=self.y_std)
-        self.kernel = modules.RBF_Kernel(bandwidth)
+        self.kernel = tfp.math.psd_kernels.ExponentiatedQuadratic(length_scale=bandwidth)
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
 
     def meta_fit(self, meta_val_data=None, log_period=500, eval_period=1000, plot_prior_during_training=False,
@@ -160,7 +160,8 @@ class PACOH_NN_Regression(MetaLearner):
             # initialize evaluation models and define their training step
             eval_models, eval_models_step = self._setup_meta_test_models_and_step(meta_test_tasks=task_batch)
             # perform training and evaluation
-            self._meta_test_training_loop(task_batch, eval_models, eval_models_step)
+            self._meta_test_training_loop(task_batch, eval_models, eval_models_step, log_period=10000,
+                                          num_iter=self.num_iter_meta_test, eval_period=10000)
             _, _, eval_metrics_grouped = self._meta_test_models_eval(task_batch, eval_models)
             eval_metrics_dict_per_task.append(eval_metrics_grouped)
 
@@ -367,7 +368,7 @@ class PACOH_NN_Regression(MetaLearner):
         X2 = tf.identity(X)
         with tf.GradientTape() as tape:
             tape.watch(X)
-            K_XX = self.kernel(X, X2)
+            K_XX = self.kernel.matrix(X, X2)
         K_grad = tape.gradient(K_XX, X)
         return K_XX, K_grad
 

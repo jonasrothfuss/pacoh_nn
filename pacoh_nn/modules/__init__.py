@@ -4,4 +4,3 @@ from .likelihood import GaussianLikelihood
 from .neural_network import BatchedFullyConnectedNN
 from .batched_model import TFModuleBatched
 from .hyper_prior import GaussianHyperPrior
-from .kernel import RBF_Kernel

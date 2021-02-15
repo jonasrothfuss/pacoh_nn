@@ -1,9 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-import math
-
-from datasets.regression_datasets import MetaDataset
+from pacoh_nn.datasets.regression_datasets import MetaDataset
 
 class SinusoidDataset(MetaDataset):
 
@@ -55,35 +53,34 @@ class SinusoidDataset(MetaDataset):
 
 
 def generate_meta_data():
-    from matplotlib import pyplot as plt
     env = SinusoidDataset(amp_low=1.0, amp_high=1.0, slope_mean=0, slope_std=0.0, x_shift_mean=0.0, x_shift_std=1.0)
 
-    meta_train_data = env.generate_meta_train_data(n_tasks=100, n_samples=20)
-    meta_val_data = env.generate_meta_test_data(n_tasks=20, n_samples_context=20, n_samples_test=200)
-    # for x, y in meta_train_data:
-    #     plt.scatter(x, y)
-    # plt.show()
+    meta_train_data = env.generate_meta_train_data(n_tasks=100, n_samples=5)
+    meta_val_data = env.generate_meta_test_data(n_tasks=20, n_samples_context=5, n_samples_test=200)
 
     return meta_train_data, meta_val_data
 
 
 
 def main():
+    tf.get_logger().setLevel('ERROR')
     from matplotlib import pyplot as plt
     # setup data set
-    from datasets.regression_datasets import provide_data
-    #meta_train_data, meta_val_data, _ = provide_data(dataset='sin', n_train_tasks=20, n_samples=5)
-    meta_train_data, meta_test_data = generate_meta_data()
 
-    from pacoh.pacoh_nn_regression import PACOH_NN_Regression
-    pacoh_model = PACOH_NN_Regression(meta_train_data, random_seed=22, num_iter_meta_train=200,
-                                         learn_likelihood=True, likelihood_std=tf.exp(0.5 * -4.631251503547343))
+    from pacoh_nn.datasets.regression_datasets import provide_data
 
-    pacoh_model.plot_prior(plot_pred_lines=True, plot_pred_std=True, plot_data=True, max_task_to_plot=10, show=True)
+    meta_train_data, meta_test_data, _ = provide_data(dataset='sin_20')
+    #meta_train_data, meta_test_data = generate_meta_data()
 
-    pacoh_model.meta_fit(meta_test_data[:10], eval_period=20000, log_period=1000, plot_prior_during_training=True)
+    from pacoh_nn.pacoh_nn_regression import PACOH_NN_Regression
+    pacoh_model = PACOH_NN_Regression(meta_train_data, random_seed=22, num_iter_meta_train=20000,
+                                      learn_likelihood=True, likelihood_std=0.1)
 
+    pacoh_model.meta_fit(meta_test_data[:10], eval_period=5000, log_period=1000,
+                         plot_prior_during_training=True, plot_period=5000)
 
+    pacoh_model.num_iter_meta_test = 3000
+    pacoh_model.prior_weight = 0.01
     fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.0))
     for i in range(2):
         x_context, y_context, x_test, y_test = meta_test_data[i]
@@ -96,6 +93,12 @@ def main():
         axes[i].legend()
         axes[i].set_xlabel('x')
         axes[i].set_xlabel('y')
+
+    fig.show()
+
+    eval_metrics_mean, eval_metrics_std = pacoh_model.meta_eval_datasets(pacoh_model)
+    for key in eval_metrics_mean:
+        print("%s: %.4f +- %.4f" % (key, eval_metrics_mean[key], eval_metrics_std[key]))
 
 
 if __name__ == '__main__':

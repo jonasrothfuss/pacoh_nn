@@ -5,7 +5,8 @@ import glob
 from collections import OrderedDict
 
 # Data directory
-from config import DATA_DIR
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 OMNIGLOT_DIR = os.path.join(DATA_DIR, 'omniglot_resized')
 FMNIST_DIR = os
 

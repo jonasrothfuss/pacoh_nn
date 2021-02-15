@@ -1,9 +1,10 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import numpy as np
 import tensorflow as tf
 import time
 
-import modules
+from pacoh_nn import modules
+
 
 class MetaLearner:
     plot_functions_during_training = False
@@ -28,7 +29,7 @@ class MetaLearner:
     def _process_meta_train_data(self, meta_train_data, meta_batch_size, batch_size, n_batched_models_train):
         self.num_meta_train_tasks = len(meta_train_data)
         self.meta_train_sampler = modules.MetaDatasetSampler(meta_train_data, batch_size, meta_batch_size=meta_batch_size,
-                                                     n_batched_models=n_batched_models_train, tiled=True)
+                                                             n_batched_models=n_batched_models_train, tiled=True)
         self.x_mean, self.y_mean, self.x_std, self.y_std = self.meta_train_sampler.get_standardization_stats()
         self.input_dim = self.meta_train_sampler.input_dim
         self.output_dim = self.meta_train_sampler.output_dim
@@ -53,7 +54,7 @@ class MetaLearner:
             log_prob = eval_models_step()
 
             # print meta-test training loss
-            if iter % log_period == 0:
+            if iter > 0 and iter % log_period == 0:
                 avg_log_prob = tf.reduce_mean(log_prob).numpy()
                 message = '\tMeta-Test - Iter %d/%d - Time %.2f sec' % (iter, num_iter, time.time() - t)
                 message += ' - Train-Log-Prob: %.3f' % avg_log_prob
@@ -61,7 +62,7 @@ class MetaLearner:
                 t = time.time()
 
             # meta-test evaluation
-            if iter % eval_period == 0:
+            if iter > 0 and iter % eval_period == 0:
                 t = time.time()
                 eval_metrics_mean, eval_metrics_std, _ = self._meta_test_models_eval(test_tasks, eval_models)
                 message = ""

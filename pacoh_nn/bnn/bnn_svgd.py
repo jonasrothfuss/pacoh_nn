@@ -2,10 +2,10 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 import math
 
-from bnn.regression_algo import RegressionModel
-from modules.neural_network import BatchedFullyConnectedNN
-from modules.prior_posterior import GaussianPrior
-from modules.likelihood import GaussianLikelihood
+from pacoh_nn.bnn.regression_algo import RegressionModel
+from pacoh_nn.modules.neural_network import BatchedFullyConnectedNN
+from pacoh_nn.modules.prior_posterior import GaussianPrior
+from pacoh_nn.modules.likelihood import GaussianLikelihood
 
 tfd = tfp.distributions
 tfk = tfp.math.psd_kernels
@@ -147,4 +147,4 @@ if __name__ == '__main__':
         nn.fit(x_val=x_val, y_val=y_val, log_period=10, num_iter_fit=n_iter_fit)
         if d == 1:
             x_plot = tf.range(-8, 8, 0.1)
-            nn.plot_predictions(x_plot, iteration=(i + 1) * n_iter_fit, experiment="bnn_svgd", show=True)
+            nn.plot_predictions(x_plot, show=True)

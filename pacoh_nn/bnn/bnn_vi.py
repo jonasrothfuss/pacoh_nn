@@ -1,9 +1,9 @@
 import tensorflow as tf
 
-from bnn.regression_algo import RegressionModel
-from modules.neural_network import BatchedFullyConnectedNN
-from modules.prior_posterior import GaussianPosterior, GaussianPrior
-from modules.likelihood import GaussianLikelihood
+from pacoh_nn.bnn.regression_algo import RegressionModel
+from pacoh_nn.modules.neural_network import BatchedFullyConnectedNN
+from pacoh_nn.modules.prior_posterior import GaussianPosterior, GaussianPrior
+from pacoh_nn.modules.likelihood import GaussianLikelihood
 
 
 class BayesianNeuralNetworkVI(RegressionModel):

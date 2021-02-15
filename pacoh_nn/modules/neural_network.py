@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from modules.batched_model import TFModuleBatched
+from pacoh_nn.modules.batched_model import TFModuleBatched
 
 
 class FullyConnectedNN(TFModuleBatched):
