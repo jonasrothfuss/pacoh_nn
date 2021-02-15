@@ -17,7 +17,9 @@ class PACOH_NN_Regression(MetaLearner):
                  hidden_layer_sizes=(32, 32, 32, 32), activation='relu', learn_likelihood=True,
                  likelihood_std=0.2, meta_batch_size=4, batch_size=5, num_iter_meta_train=5000,
                  num_iter_meta_test=3000, n_samples_per_prior=10, num_hyper_posterior_particles=3,
-                 num_posterior_particles=5, prior_weight=0.1, hyper_prior_weight=1e-4,
+                 num_posterior_particles=5, prior_weight=0.1, hyper_prior_weight=1e-4, hyper_prior_nn_std=0.4,
+                 hyper_prior_log_var_mean=-3.0, hyper_prior_likelihood_log_var_mean_mean=-5,
+                 hyper_prior_likelihood_log_var_log_var_mean=-2.,
                  bandwidth=10.0, random_seed=None):
 
         super().__init__(random_seed=random_seed)
@@ -73,12 +75,13 @@ class PACOH_NN_Regression(MetaLearner):
                                                  name='gaussian_prior')
 
         self.hyper_prior_module = modules.GaussianHyperPrior(self.prior_module,
-                                                             mean_mean=0.0, bias_mean_std=0.5, kernel_mean_std=0.5,
-                                                             log_var_mean=-3.0, bias_log_var_std=0.5,
-                                                             kernel_log_var_std=0.5,
-                                                             likelihood_log_var_mean_mean=-8,
+                                                             mean_mean=0.0, bias_mean_std=hyper_prior_nn_std,
+                                                             kernel_mean_std=hyper_prior_nn_std,
+                                                             log_var_mean=hyper_prior_log_var_mean, bias_log_var_std=hyper_prior_nn_std,
+                                                             kernel_log_var_std=hyper_prior_nn_std,
+                                                             likelihood_log_var_mean_mean=hyper_prior_likelihood_log_var_mean_mean,
                                                              likelihood_log_var_mean_std=1.0,
-                                                             likelihood_log_var_log_var_mean=-4,
+                                                             likelihood_log_var_log_var_mean=hyper_prior_likelihood_log_var_log_var_mean,
                                                              likelihood_log_var_log_var_std=0.2)
 
         self.hyper_posterior_particles = tf.Variable(tf.expand_dims(self.prior_module.get_variables_stacked_per_model(), axis=0))
