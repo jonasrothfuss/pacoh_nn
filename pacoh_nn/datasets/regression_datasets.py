@@ -14,9 +14,18 @@ Y_LOW = -2.5
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+
+PHYSIONET_URL = 'https://www.dropbox.com/sh/2ocmumrq3o9ak8u/AAAIHPW7XZj_5uCX0gkaQZRLa?dl=1'
 PHYSIONET_DIR = os.path.join(DATA_DIR, 'physionet2012')
+
+SWISSFEL_URL = 'https://www.dropbox.com/sh/rabvj5jyw3lb7zh/AABcLeFmGTOMtjeTzqG81FUZa?dl=1'
 SWISSFEL_DIR = os.path.join(DATA_DIR, 'swissfel')
 
+BERKELEY_SENSOR_URL = 'https://www.dropbox.com/sh/y6egx20lod1gsrs/AACyXAk9Ua7SI-q1tpEb1SHba?dl=1'
+BERKELEY_SENSOR_DIR = os.path.join(DATA_DIR, 'sensor_data')
+
+MHC_DATA_URL = 'https://www.dropbox.com/sh/1hd9ey7pj7vhfw9/AADKgv5B1rLMBaYDrarbIyiea?dl=1'
+MHC_DATA_DIR = os.path.join(DATA_DIR, 'mhc_data')
 
 class MetaDataset:
     def __init__(self, random_state=None):
@@ -43,6 +52,11 @@ class PhysionetMetaDataset(MetaDataset):
             self.data_dir = PHYSIONET_DIR
         else:
             raise ValueError("No data directory provided.")
+
+        if not os.path.isdir(self.data_dir):
+            print("Physionet data does not exist in %s" % self.data_dir)
+            download_and_unzip_data(PHYSIONET_URL, self.data_dir)
+
         self.variable_list = ['GCS', 'Urine', 'HCT', 'BUN', 'Creatinine', 'DiasABP']
 
         assert variable_id < len(self.variable_list), "Unknown variable ID"
@@ -296,6 +310,11 @@ class SwissfelMetaDataset(MetaDataset):
 
         self.swissfel_dir = SWISSFEL_DIR if swissfel_dir is None else swissfel_dir
 
+        if not os.path.isdir(self.swissfel_dir):
+            print("Swissfel data does not exist in %s"%self.swissfel_dir)
+            download_and_unzip_data(SWISSFEL_URL, self.swissfel_dir)
+
+
         if param_space_id == 0:
             run_specs = copy.deepcopy(self.runs_12dim)
         elif param_space_id == 1:
@@ -394,6 +413,11 @@ class MHCMetaDataset(MetaDataset):
             self.test_task_ids = [3, 5]
         self.train_task_ids = sorted(list(set(range(7)) - set(self.test_task_ids)))
 
+        if not os.path.isdir(MHC_DATA_DIR):
+            print("MHC-I data does not exist in %s"%MHC_DATA_DIR)
+            download_and_unzip_data(MHC_DATA_URL, MHC_DATA_DIR)
+
+
     def generate_meta_test_data(self, n_tasks=2, n_samples_context=20, n_samples_test=-1):
         assert n_tasks <= 2
         task_tuples = self._load_data()
@@ -420,7 +444,7 @@ class MHCMetaDataset(MetaDataset):
 
     def _load_data(self):
         from scipy.io import loadmat
-        data_path = os.path.join(DATA_DIR, 'mhc_data/iedb_benchmark.mat')
+        data_path = os.path.join(MHC_DATA_DIR, 'iedb_benchmark.mat')
         data = loadmat(data_path)
 
         self.MHC_alleles = data['MHC_alleles']
@@ -443,6 +467,10 @@ class BerkeleySensorMetaDataset(MetaDataset):
         self.train_task_ids = task_ids[:36]
         self.test_task_ids = task_ids[36:]
         self.separate_train_test_days = separate_train_test_days # whether to also seperate the meta-train and meta-test set by days
+
+        if not os.path.isdir(BERKELEY_SENSOR_DIR):
+            print("Berkeley-Sensor data does not exist in %s" % BERKELEY_SENSOR_DIR)
+            download_and_unzip_data(BERKELEY_SENSOR_URL, BERKELEY_SENSOR_DIR)
 
     def generate_meta_test_data(self, n_tasks=10, n_samples_context=144, n_samples_test=-1):
         task_tuples = self._load_data()
@@ -476,7 +504,8 @@ class BerkeleySensorMetaDataset(MetaDataset):
 
     def _load_data(self, lags=10):
         from scipy.io import loadmat
-        data_path = os.path.join(DATA_DIR, 'sensor_data/berkeley_data.mat')
+
+        data_path = os.path.join(BERKELEY_SENSOR_DIR, 'berkeley_data.mat')
         data = loadmat(data_path)['berkeley_data']['data'][0][0]
         # replace outlier
         data[4278, 6] = (data[4278 - 1, 6] + data[4278 + 1, 6]) / 2
@@ -501,6 +530,23 @@ class BerkeleySensorMetaDataset(MetaDataset):
 
         self.n_points_per_day = int(data_tuples[0][0].shape[0] / 4)
         return data_tuples
+
+
+def download_and_unzip_data(url, target_dir):
+    from urllib.request import urlopen
+    from zipfile import ZipFile
+    print('Downloading %s'%url)
+    tempfilepath = os.path.join(DATA_DIR, 'tempfile.zip')
+    zipresp = urlopen(url)
+    with open(tempfilepath, 'wb') as f:
+        f.write(zipresp.read())
+    zf = ZipFile(tempfilepath)
+    print('Extracting to %s' % target_dir)
+    zf.extractall(path=target_dir)
+    zf.close()
+    os.remove(tempfilepath)
+
+
 
 """ Data provider """
 
@@ -567,12 +613,6 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
 
         if n_train_tasks is None: n_train_tasks = 20
 
-    elif dataset == 'mnist':
-        dataset = MNISTRegressionDataset(random_state=np.random.RandomState(seed + 1))
-        N_TEST_SAMPLES = -1
-        N_VALID_TASKS = N_TEST_TASKS = 1000
-        n_context_samples = 200
-        n_train_samples = 28 * 28
 
     elif 'physionet' in dataset:
         variable_id = int(dataset[-1])
@@ -584,16 +624,6 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
         n_train_tasks = 100
         # N_VALID_TASKS = N_TEST_TASKS = 500
         N_VALID_TASKS = N_TEST_TASKS = 30
-
-    elif dataset == 'pendulum':
-        dataset = PendulumDataset(random_state=np.random.RandomState(seed + 1))
-
-        if n_train_tasks is None: n_train_tasks = 10
-
-        if n_samples is None:
-            n_train_samples = n_context_samples = 200
-        else:
-            n_train_samples = n_context_samples = n_samples
 
 
     elif 'mhc' in dataset:
