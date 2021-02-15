@@ -32,7 +32,7 @@ class MetaDataset:
         raise NotImplementedError
 
 
-class PhysionetDataset(MetaDataset):
+class PhysionetMetaDataset(MetaDataset):
 
     def __init__(self, random_state=None, variable_id=0, dtype=np.float32, physionet_dir=None):
         super().__init__(random_state)
@@ -126,7 +126,7 @@ class PhysionetDataset(MetaDataset):
 
         return meta_test_tuples
 
-class SinusoidDataset(MetaDataset):
+class SinusoidMetaDataset(MetaDataset):
 
     def __init__(self, amp_low=0.7, amp_high=1.3,
                  period_low=1.5, period_high=1.5,
@@ -174,45 +174,7 @@ class SinusoidDataset(MetaDataset):
         period = self.random_state.uniform(self.period_low, self.period_high)
         return lambda x: slope * x + amplitude * np.sin(period * (x - x_shift)) + y_shift
 
-class SinusoidNonstationaryDataset(MetaDataset):
-
-    def __init__(self, noise_std=0.0, x_low=-5, x_high=5, random_state=None):
-
-        super().__init__(random_state)
-        self.noise_std = noise_std
-        self.x_low, self.x_high = x_low, x_high
-
-    def generate_meta_test_data(self, n_tasks, n_samples_context, n_samples_test):
-        assert n_samples_test > 0
-        meta_test_tuples = []
-        for i in range(n_tasks):
-            f = self._sample_fun()
-            X = self.random_state.uniform(self.x_low, self.x_high, size=(n_samples_context + n_samples_test, 1))
-            Y = f(X)
-            meta_test_tuples.append(
-                (X[:n_samples_context], Y[:n_samples_context], X[n_samples_context:], Y[n_samples_context:]))
-
-        return meta_test_tuples
-
-    def generate_meta_train_data(self, n_tasks, n_samples):
-        meta_train_tuples = []
-        for i in range(n_tasks):
-            f = self._sample_fun()
-            X = self.random_state.uniform(self.x_low, self.x_high, size=(n_samples, 1))
-            Y = f(X)
-            meta_train_tuples.append((X, Y))
-        return meta_train_tuples
-
-    def _sample_fun(self):
-        intersect = self.random_state.normal(loc=-2., scale=0.2)
-        slope = self.random_state.normal(loc=1, scale=0.3)
-        freq = lambda x: 1 + np.abs(x)
-        mean = lambda x: intersect + slope * x
-        return lambda x: mean(x) + np.sin(freq(x) * x) + self.random_state.normal(loc=0, scale=self.noise_std,
-                                                                                  size=x.shape)
-
-
-class GPFunctionsDataset(MetaDataset):
+class GPFunctionsMetaDataset(MetaDataset):
 
     def __init__(self, noise_std=0.1, lengthscale=1.0, mean=0.0, x_low=-5, x_high=5, random_state=None):
         self.noise_std, self.lengthscale, self.mean = noise_std, lengthscale, mean
@@ -253,8 +215,7 @@ class GPFunctionsDataset(MetaDataset):
         y = f + self.random_state.normal(scale=self.noise_std, size=f.shape)
         return y
 
-
-class CauchyDataset(MetaDataset):
+class CauchyMetaDataset(MetaDataset):
 
     def __init__(self, noise_std=0.05, ndim_x=2, random_state=None):
         self.noise_std = noise_std
@@ -306,8 +267,7 @@ class CauchyDataset(MetaDataset):
 
 """ Swissfel Dataset"""
 
-
-class SwissfelDataset(MetaDataset):
+class SwissfelMetaDataset(MetaDataset):
     runs_12dim = [
         {'experiment': '2018_10_31/line_ucb_ascent', 'run': 0},
         {'experiment': '2018_10_31/line_ucb_ascent', 'run': 1},
@@ -423,7 +383,7 @@ class SwissfelDataset(MetaDataset):
 
 """ MHC complex """
 
-class MHCDataset(MetaDataset):
+class MHCMetaDataset(MetaDataset):
 
     def __init__(self, cv_split_id=0, random_state=None):
         super().__init__(random_state)
@@ -474,7 +434,7 @@ class MHCDataset(MetaDataset):
 
 """ Berkeley Sensor data """
 
-class BerkeleySensorDataset(MetaDataset):
+class BerkeleySensorMetaDataset(MetaDataset):
 
     def __init__(self, random_state=None, separate_train_test_days=True):
         super().__init__(random_state)
@@ -562,7 +522,7 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
         if len(dataset.split('_')) == 2:
             n_train_tasks = int(dataset.split('_')[-1])
 
-        dataset = SinusoidNonstationaryDataset(random_state=np.random.RandomState(seed + 1))
+        dataset = SinusoidNonstationaryMetaDataset(random_state=np.random.RandomState(seed + 1))
 
         if n_samples is None:
             n_train_samples = n_context_samples = 20
@@ -575,7 +535,7 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
         if len(dataset.split('_')) == 2:
             n_train_tasks = int(dataset.split('_')[-1])
 
-        dataset = SinusoidDataset(random_state=np.random.RandomState(seed + 1))
+        dataset = SinusoidMetaDataset(random_state=np.random.RandomState(seed + 1))
 
         if n_samples is None:
             n_train_samples = n_context_samples = 5
@@ -585,7 +545,7 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
         if n_train_tasks is None: n_train_tasks = 20
 
     elif 'gp_funcs' in dataset:
-        dataset = GPFunctionsDataset(random_state=np.random.RandomState(seed + 1))
+        dataset = GPFunctionsMetaDataset(random_state=np.random.RandomState(seed + 1))
 
         if n_samples is None:
             n_train_samples = n_context_samples = 5
@@ -598,7 +558,7 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
         if len(dataset.split('_')) == 2:
             n_train_tasks = int(dataset.split('_')[-1])
 
-        dataset = CauchyDataset(random_state=np.random.RandomState(seed + 1))
+        dataset = CauchyMetaDataset(random_state=np.random.RandomState(seed + 1))
 
         if n_samples is None:
             n_train_samples = n_context_samples = 20
@@ -617,7 +577,7 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
     elif 'physionet' in dataset:
         variable_id = int(dataset[-1])
         assert 0 <= variable_id <= 5
-        dataset = PhysionetDataset(random_state=np.random.RandomState(seed + 1), variable_id=variable_id)
+        dataset = PhysionetMetaDataset(random_state=np.random.RandomState(seed + 1), variable_id=variable_id)
         n_context_samples = 24
         n_train_samples = 47
 
@@ -638,7 +598,7 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
 
     elif 'mhc' in dataset:
         cv_split_id = int(dataset[-1])
-        dataset = MHCDataset(cv_split_id=cv_split_id, random_state=np.random.RandomState(seed + 1))
+        dataset = MHCMetaDataset(cv_split_id=cv_split_id, random_state=np.random.RandomState(seed + 1))
         if n_train_tasks is None:
             n_train_tasks = 5
         if n_samples is None:
@@ -656,7 +616,7 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
         if len(dataset.split('_')) == 2:
             n_train_tasks = int(dataset.split('_')[-1])
 
-        dataset = BerkeleySensorDataset(random_state=np.random.RandomState(seed + 1))
+        dataset = BerkeleySensorMetaDataset(random_state=np.random.RandomState(seed + 1))
 
         assert n_samples is None
         n_train_samples = 2*144
@@ -668,7 +628,7 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
 
 
     elif dataset == 'swissfel':
-        dataset = SwissfelDataset(random_state=np.random.RandomState(seed + 1))
+        dataset = SwissfelMetaDataset(random_state=np.random.RandomState(seed + 1))
         if n_train_tasks is None:
             n_train_tasks = 5
 
@@ -699,68 +659,5 @@ def provide_data(dataset, seed=28, n_train_tasks=None, n_samples=None, config=No
     data_test = data_test_valid[:N_VALID_TASKS]
 
     return data_train, data_valid, data_test
-
-
-if __name__ == "__main__":
-
-    # dataset = BerkeleySensorDataset(random_state=np.random.RandomState(22))
-    # meta_train_tuples = dataset.generate_meta_train_data()
-    # meta_test_tuples = dataset.generate_meta_test_data()
-
-    meta_train_tuples, meta_test_tuples, _ = provide_data('berkeley')
-
-
-    from matplotlib import pyplot as plt
-    for x, y, x_test, y_test in meta_test_tuples:
-        plt.plot(range(y_test.shape[0]), y_test)
-    plt.show()
-
-
-
-    # dataset = MichalewiczDataset(ndim=2, m=4)
-    # fun = dataset._sample_function()
-
-    # x = np.arange(0, np.pi, 0.01)
-    # y = fun(x)
-    #
-    # from matplotlib import pyplot as plt
-    # plt.plot(x, y)
-    # plt.show()
-
-    # from mpl_toolkits.mplot3d import Axes3D
-    # import matplotlib.pyplot as plt
-    # from matplotlib import cm
-    # from matplotlib.ticker import LinearLocator, FormatStrFormatter
-    # import numpy as np
-    #
-    # fig = plt.figure()
-    # ax = fig.gca(projection='3d')
-    #
-    # # Make data.
-    # X = np.arange(0, np.pi, 0.02)
-    # Y = np.arange(0, np.pi, 0.02)
-    # X, Y = np.meshgrid(X, Y)
-    #
-    # input = np.stack([X.flatten(), Y.flatten()], axis=-1)
-    #
-    # Z = fun(input).reshape(X.shape)
-    #
-    #
-    # # Plot the surface.
-    # surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
-    #                        linewidth=0, antialiased=False)
-    #
-    # # Customize the z axis.
-    # # ax.set_zlim(-1.01, 1.01)
-    # ax.zaxis.set_major_locator(LinearLocator(10))
-    # ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
-    #
-    # # Add a color bar which maps values to colors.
-    # fig.colorbar(surf, shrink=0.5, aspect=5)
-    #
-    # plt.show()
-
-
-    #test_tuples = dataset.generate_meta_train_data(n_tasks=5, n_samples=-1)
 
 

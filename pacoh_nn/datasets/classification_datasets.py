@@ -1,5 +1,4 @@
 import numpy as np
-import imageio
 import os
 import glob
 from collections import OrderedDict
@@ -400,6 +399,7 @@ def resize_omniglot():
             print('resized %i out of 32400 images'%i)
 
 def load_img_to_numpy(img_path):
+    import imageio
     img = imageio.imread(img_path)
     img = 1.0 - img.astype(np.float32) / 255.0  # convert to float, scale and invert
     if img.ndim == 2:
