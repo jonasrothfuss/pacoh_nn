@@ -49,7 +49,7 @@ class RegressionModel:
         ax.fill_between(x_plot, lcb.numpy().flatten(), ucb.numpy().flatten(), alpha=0.2)
 
         for i in range(y_pred.shape[0]):
-            ax.plot(x_plot, y_pred[i], color='green', alpha=0.4, linewidth=1.0)
+            ax.plot(x_plot, y_pred[i], color='green', alpha=0.2, linewidth=1.0)
 
         if plot_train_data:
             # unnormalize training data & plot it
