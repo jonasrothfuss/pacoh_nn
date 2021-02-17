@@ -13,13 +13,12 @@ from pacoh_nn.meta_algo import MetaLearner
 
 class PACOH_NN_Regression(MetaLearner):
 
-    def __init__(self, meta_train_data, lr=2e-3,
-                 hidden_layer_sizes=(32, 32, 32, 32), activation='relu', learn_likelihood=True,
-                 likelihood_std=0.2, meta_batch_size=4, batch_size=5, num_iter_meta_train=5000,
-                 num_iter_meta_test=3000, n_samples_per_prior=10, num_hyper_posterior_particles=3,
+    def __init__(self, meta_train_data, lr=2e-3,  hidden_layer_sizes=(32, 32, 32, 32), activation='relu',
+                 learn_likelihood=True, likelihood_std=0.1, meta_batch_size=4, batch_size=5, num_iter_meta_train=30000,
+                 num_iter_meta_test=5000, n_samples_per_prior=10, num_hyper_posterior_particles=3,
                  num_posterior_particles=5, prior_weight=0.1, hyper_prior_weight=1e-4, hyper_prior_nn_std=0.4,
-                 hyper_prior_log_var_mean=-3.0, hyper_prior_likelihood_log_var_mean_mean=-5,
-                 hyper_prior_likelihood_log_var_log_var_mean=-2.,
+                 hyper_prior_log_var_mean=-3.0, hyper_prior_likelihood_log_var_mean_mean=-8,
+                 hyper_prior_likelihood_log_var_log_var_mean=-4.,
                  bandwidth=10.0, random_seed=None):
 
         super().__init__(random_seed=random_seed)
@@ -134,6 +133,9 @@ class PACOH_NN_Regression(MetaLearner):
 
             if len(message) > 0:
                 print(message)
+
+        loss = - tf.reduce_mean(log_prob).numpy()
+        return loss
 
     def meta_eval_datasets(self, meta_valid_data, max_tasks_parallel=5):
         """
@@ -283,7 +285,7 @@ class PACOH_NN_Regression(MetaLearner):
         ax.fill_between(x_plot, lcb.numpy().flatten(), ucb.numpy().flatten(), alpha=0.2)
 
         for i in range(y_pred.shape[0]):
-            ax.plot(x_plot, y_pred[i], color='green', alpha=0.4, linewidth=1.0)
+            ax.plot(x_plot, y_pred[i], color='green', alpha=0.2, linewidth=1.0)
 
         if plot_context_data:
             ax.scatter(x_context, y_context)

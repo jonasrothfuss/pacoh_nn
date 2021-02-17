@@ -1,32 +1,38 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
-from pacoh_nn.datasets.regression_datasets import MetaDataset
+class SinusoidEnv():
 
-class SinusoidDataset(MetaDataset):
-
-    def __init__(self, amp_low=0.7, amp_high=1.3,
-                 period_low=1.5, period_high=1.5,
-                 x_shift_mean=0.0, x_shift_std=0.1,
-                 y_shift_mean=5.0, y_shift_std=0.1,
-                 slope_mean=0.5, slope_std=0.2,
-                 noise_std=0.1, x_low=-5, x_high=5, random_state=None):
-
-        super().__init__(random_state)
-        assert y_shift_std >= 0 and noise_std >= 0, "std must be non-negative"
-        self.amp_low, self.amp_high = amp_low, amp_high
-        self.period_low, self.period_high = period_low, period_high
-        self.y_shift_mean, self.y_shift_std = y_shift_mean, y_shift_std
-        self.x_shift_mean, self.x_shift_std = x_shift_mean, x_shift_std
-        self.slope_mean, self.slope_std = slope_mean, slope_std
+    def __init__(self, amp_low=2.0, amp_high=3.0, x_shift_low=-2.0, x_shift_high=2.0,
+                 x_low=-4.0, x_high=4.0, noise_std=0.1, seed=234):
+        self.amp_low = amp_low
+        self.amp_high = amp_high
+        self.x_shift_low = x_shift_low
+        self.x_shift_high = x_shift_high
+        self.x_low = x_low
+        self.x_high = x_high
         self.noise_std = noise_std
-        self.x_low, self.x_high = x_low, x_high
+        self.random_state = np.random.RandomState(seed)
+
+    def _sample_sinusoid_fn(self):
+        amplitude = self.random_state.uniform(self.amp_low, self.amp_high)
+        x_shift = self.random_state.uniform(self.x_shift_low, self.x_shift_high)
+        return lambda x: amplitude * np.sin((x - x_shift)) + 5.0
+
+    def generate_meta_train_data(self, n_tasks, n_samples):
+        meta_train_tuples = []
+        for i in range(n_tasks):
+            f = self._sample_sinusoid_fn()
+            X = self.random_state.uniform(self.x_low, self.x_high, size=(n_samples, 1))
+            Y = f(X) + self.noise_std * self.random_state.normal(size=f(X).shape)
+            meta_train_tuples.append((X, Y))
+        return meta_train_tuples
 
     def generate_meta_test_data(self, n_tasks, n_samples_context, n_samples_test):
         assert n_samples_test > 0
         meta_test_tuples = []
         for i in range(n_tasks):
-            f = self._sample_sinusoid()
+            f = self._sample_sinusoid_fn()
             X = self.random_state.uniform(self.x_low, self.x_high, size=(n_samples_context + n_samples_test, 1))
             Y = f(X) + self.noise_std * self.random_state.normal(size=f(X).shape)
             meta_test_tuples.append(
@@ -34,72 +40,83 @@ class SinusoidDataset(MetaDataset):
 
         return meta_test_tuples
 
-    def generate_meta_train_data(self, n_tasks, n_samples):
-        meta_train_tuples = []
-        for i in range(n_tasks):
-            f = self._sample_sinusoid()
-            X = self.random_state.uniform(self.x_low, self.x_high, size=(n_samples, 1))
-            Y = f(X) + self.noise_std * self.random_state.normal(size=f(X).shape)
-            meta_train_tuples.append((X, Y))
-        return meta_train_tuples
-
-    def _sample_sinusoid(self):
-        amplitude = self.random_state.uniform(self.amp_low, self.amp_high)
-        x_shift = self.random_state.normal(loc=self.x_shift_mean, scale=self.x_shift_std)
-        y_shift = self.random_state.normal(loc=self.y_shift_mean, scale=self.y_shift_std)
-        slope = self.random_state.normal(loc=self.slope_mean, scale=self.slope_std)
-        period = self.random_state.uniform(self.period_low, self.period_high)
-        return lambda x: slope * x + amplitude * np.sin(period * (x - x_shift)) + y_shift
 
 
-def generate_meta_data():
-    env = SinusoidDataset(amp_low=1.0, amp_high=1.0, slope_mean=0, slope_std=0.0, x_shift_mean=0.0, x_shift_std=1.0)
+tf.get_logger().setLevel('ERROR')
+import warnings
+warnings.filterwarnings("ignore")
+from matplotlib import pyplot as plt
 
-    meta_train_data = env.generate_meta_train_data(n_tasks=100, n_samples=5)
-    meta_val_data = env.generate_meta_test_data(n_tasks=20, n_samples_context=5, n_samples_test=200)
-
-    return meta_train_data, meta_val_data
-
-
-
-def main():
-    tf.get_logger().setLevel('ERROR')
-    from matplotlib import pyplot as plt
-    # setup data set
-
-    from pacoh_nn.datasets.regression_datasets import provide_data
-
-    meta_train_data, meta_test_data, _ = provide_data(dataset='sin_20')
-    #meta_train_data, meta_test_data = generate_meta_data()
-
-    from pacoh_nn.pacoh_nn_regression import PACOH_NN_Regression
-    pacoh_model = PACOH_NN_Regression(meta_train_data, random_seed=22, num_iter_meta_train=20000,
-                                      learn_likelihood=True, likelihood_std=0.1)
-
-    pacoh_model.meta_fit(meta_test_data[:10], eval_period=5000, log_period=1000,
-                         plot_prior_during_training=True, plot_period=5000)
-
-    pacoh_model.num_iter_meta_test = 3000
-    pacoh_model.prior_weight = 0.01
-    fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.0))
-    for i in range(2):
-        x_context, y_context, x_test, y_test = meta_test_data[i]
-
-        # plotting
-        x_plot = tf.range(-5, 5, 0.1)
-        pacoh_model.plot_posterior(x_context, y_context, x_plot, ax=axes[i])
-        axes[i].scatter(x_test, y_test, color='blue', alpha=0.2, label="test data")
-        axes[i].scatter(x_context, y_context, color='red', label="train data")
-        axes[i].legend()
-        axes[i].set_xlabel('x')
-        axes[i].set_xlabel('y')
-
-    fig.show()
-
-    eval_metrics_mean, eval_metrics_std = pacoh_model.meta_eval_datasets(pacoh_model)
-    for key in eval_metrics_mean:
-        print("%s: %.4f +- %.4f" % (key, eval_metrics_mean[key], eval_metrics_std[key]))
+""" generate meta-learning data from Sinusoid environment """
+env = SinusoidEnv()
+meta_train_data = env.generate_meta_train_data(n_tasks=200, n_samples=5)
+meta_test_data = env.generate_meta_test_data(n_tasks=20, n_samples_context=5, n_samples_test=200)
 
 
-if __name__ == '__main__':
-    main()
+""" plot some of the meta-learning tasks """
+for x_context, y_context, x_test, y_test in meta_test_data[:5]:
+    plt.scatter(x_test, y_test)
+plt.title('Meta-Learning Tasks')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.show()
+
+from pacoh_nn.pacoh_nn_regression import PACOH_NN_Regression
+pacoh_model = PACOH_NN_Regression(meta_train_data, random_seed=22, num_iter_meta_train=20000, num_iter_meta_test=3000,
+                                  learn_likelihood=False, likelihood_std=0.1, hyper_prior_weight=1e-4)
+
+""" Training a Standard Bayesian Neural Network """
+from pacoh_nn.bnn import BayesianNeuralNetworkSVGD
+
+fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.0))
+for i in range(2):
+    x_context, y_context, x_test, y_test = meta_test_data[i]
+
+    # setting up and fitting the BNN
+    bnn = BayesianNeuralNetworkSVGD(x_context, y_context, hidden_layer_sizes=(64, 64, 64, 64), prior_weight=0.001,
+                                    bandwidth=1000.0)
+    bnn.fit(x_val=x_test, y_val=y_test, num_iter_fit=500, log_period=500)
+
+    # plotting
+    x_plot = tf.range(-5, 5, 0.1)
+    bnn.plot_predictions(x_plot, ax=axes[i])
+    axes[i].scatter(x_test, y_test, color='blue', alpha=0.2, label="test data")
+    axes[i].scatter(x_context, y_context, color='red', label="train data")
+    axes[i].legend()
+    axes[i].set_xlabel('x')
+    axes[i].set_xlabel('y')
+
+fig.show()
+
+
+""" Meta-Training: Meta-Learning a BNN Prior with PACOH-NN """
+from pacoh_nn.pacoh_nn_regression import PACOH_NN_Regression
+pacoh_model = PACOH_NN_Regression(meta_train_data, random_seed=22, num_iter_meta_train=20000,
+                                  num_iter_meta_test=3000,
+                                  learn_likelihood=False, likelihood_std=0.1, hyper_prior_weight=1e-4)
+
+pacoh_model.meta_fit(meta_val_data=meta_test_data[:10], eval_period=10000, log_period=1000,
+                     plot_prior_during_training=True, plot_period=10000)
+
+""" Meta-Testing: Posterior inference with the meta-learned PACOH-NN prior"""
+
+fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.0))
+for i in range(2):
+    x_context, y_context, x_test, y_test = meta_test_data[i]
+
+    # plotting
+    x_plot = tf.range(-5, 5, 0.1)
+    pacoh_model.plot_posterior(x_context, y_context, x_plot, ax=axes[i])
+    axes[i].scatter(x_test, y_test, color='blue', alpha=0.2, label="test data")
+    axes[i].scatter(x_context, y_context, color='red', label="train data")
+    axes[i].legend()
+    axes[i].set_xlabel('x')
+    axes[i].set_xlabel('y')
+
+fig.show()
+
+eval_metrics_mean, eval_metrics_std = pacoh_model.meta_eval_datasets(meta_test_data)
+for key in eval_metrics_mean:
+    print("%s: %.4f +- %.4f" % (key, eval_metrics_mean[key], eval_metrics_std[key]))
+
+
