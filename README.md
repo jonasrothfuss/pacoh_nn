@@ -1,5 +1,5 @@
 ## PACOH-NN: Meta-Learning Bayesian Neural Network Priors based on PAC-Bayesian Theory
-This repository provides source code corresponding the *PACOH-NN* method, introduced in the paper [*PACOH: Bayes-Optimal Meta-Learning with PAC-Guarantees*](https://arxiv.org/abs/2002.05551).
+This repository provides source code for the *PACOH-NN* method, introduced in the paper [*PACOH: Bayes-Optimal Meta-Learning with PAC-Guarantees*](https://arxiv.org/abs/2002.05551).
 
 Authors of the repository: [Martin Josifoski](https://people.epfl.ch/martin.josifoski/?lang=en) and [Jonas Rothfuss](https://las.inf.ethz.ch/people/jonas-rothfuss) 
 ## Installation
@@ -65,10 +65,10 @@ Once you call provide_data, the necessary datasets are automatically downloaded.
 If you use the PACOH-NN implementation or the meta-learning environments in your research, please cite it as follows:
 
 ```
-@article{rothfuss2021pacoh,
-  title={PACOH: Bayes-optimal meta-learning with PAC-guarantees},
+@inproceedings{rothfuss2021pacoh,
+  title={{PACOH: Bayes-Optimal Meta-Learning with PAC-Guarantees}},
   author={Rothfuss, Jonas and Fortuin, Vincent and Josifoski, Martin and Krause, Andreas},
-  journal={arXiv preprint arXiv:2002.05551},
+  booktitle={International Conference on Machine Learning},
   year={2021}
 }
 ```
